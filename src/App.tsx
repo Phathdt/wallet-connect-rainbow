@@ -11,8 +11,9 @@ import {
   useDisconnect,
   useSignMessage,
   useSendTransaction,
+  useSwitchChain,
 } from 'wagmi';
-import { mainnet, polygon } from 'wagmi/chains';
+import { sepolia, baseSepolia } from 'wagmi/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { parseEther } from 'viem';
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
@@ -24,20 +25,23 @@ const projectId = 'd04aa36dc1fcfb0744feed2303a64fc0';
 const config = getDefaultConfig({
   appName: 'My Web3 App',
   projectId: projectId,
-  chains: [mainnet, polygon],
+  chains: [sepolia, baseSepolia],
   transports: {
-    [mainnet.id]: http(),
-    [polygon.id]: http(),
+    [sepolia.id]: http(),
+    [baseSepolia.id]: http(),
   },
 });
 
 const DirectWalletConnect = () => {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chain } = useAccount();
   const { connectAsync, connectors } = useConnect();
   const { disconnect } = useDisconnect();
+  const { switchChainAsync } = useSwitchChain();
+
   const [connectingWallet, setConnectingWallet] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [switchingNetwork, setSwitchingNetwork] = useState<boolean>(false);
 
   const { data: signMessageData, signMessageAsync, error: signError } = useSignMessage();
 
@@ -58,6 +62,11 @@ const DirectWalletConnect = () => {
   const supportedWallets = [
     { id: 'okx', name: 'OKX Wallet', color: '#000' },
     { id: 'metaMask', name: 'MetaMask', color: '#E8831D' },
+  ];
+
+  const supportedNetworks = [
+    { id: sepolia.id, name: 'Sepolia', chainId: sepolia.id, color: '#6d28d9' },
+    { id: baseSepolia.id, name: 'Base Sepolia', chainId: baseSepolia.id, color: '#0052ff' },
   ];
 
   const handleConnectWallet = async (walletId: string) => {
@@ -83,6 +92,19 @@ const DirectWalletConnect = () => {
       console.error('Failed to connect wallet:', error);
     } finally {
       setConnectingWallet(null);
+    }
+  };
+
+  const handleSwitchNetwork = async (chainId: number) => {
+    if (!isConnected) return;
+
+    setSwitchingNetwork(true);
+    try {
+      await switchChainAsync({ chainId });
+    } catch (error) {
+      console.error('Failed to switch network:', error);
+    } finally {
+      setSwitchingNetwork(false);
     }
   };
 
@@ -150,6 +172,31 @@ const DirectWalletConnect = () => {
           <div style={{ padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
             <h3>Connected Account</h3>
             <p style={{ wordBreak: 'break-all' }}><strong>Address:</strong> {address}</p>
+            <p><strong>Network:</strong> {chain?.name || 'Unknown'}</p>
+          </div>
+
+          <div>
+            <h3>Select Network</h3>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+              {supportedNetworks.map((network) => (
+                <button
+                  key={network.id}
+                  onClick={() => handleSwitchNetwork(network.chainId)}
+                  disabled={switchingNetwork || chain?.id === network.chainId}
+                  style={{
+                    padding: '10px',
+                    backgroundColor: chain?.id === network.chainId ? '#e0e0e0' : network.color,
+                    color: chain?.id === network.chainId ? '#000' : 'white',
+                    border: chain?.id === network.chainId ? '2px solid #000' : 'none',
+                    borderRadius: '4px',
+                    cursor: chain?.id === network.chainId ? 'default' : 'pointer',
+                    opacity: chain?.id === network.chainId ? 0.7 : 1,
+                  }}
+                >
+                  {chain?.id === network.chainId ? `Currently on ${network.name}` : `Switch to ${network.name}`}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div style={{ display: 'flex', gap: '10px' }}>
