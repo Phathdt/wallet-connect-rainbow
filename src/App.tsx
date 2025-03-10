@@ -62,6 +62,8 @@ const DirectWalletConnect = () => {
   const supportedWallets = [
     { id: 'okx', name: 'OKX Wallet', color: '#000' },
     { id: 'metaMask', name: 'MetaMask', color: '#E8831D' },
+    { id: 'trust', name: 'Trust Wallet', color: '#3375BB' },
+    { id: 'rabby', name: 'Rabby Wallet', color: '#8697FF' },
   ];
 
   const supportedNetworks = [
@@ -78,6 +80,12 @@ const DirectWalletConnect = () => {
           return true;
         }
         if (walletId === 'metaMask' && c.name.toLowerCase().includes('metamask')) {
+          return true;
+        }
+        if (walletId === 'trust' && c.name.toLowerCase().includes('trust')) {
+          return true;
+        }
+        if (walletId === 'rabby' && c.name.toLowerCase().includes('rabby')) {
           return true;
         }
         return false;
