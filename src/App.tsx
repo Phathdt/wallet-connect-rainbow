@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import '@rainbow-me/rainbowkit/styles.css'
-import { RainbowKitProvider, ConnectButton } from '@rainbow-me/rainbowkit'
+import { RainbowKitProvider, useConnectModal } from '@rainbow-me/rainbowkit'
 import {
   http,
   WagmiProvider,
   useAccount,
+  useConnect,
   useDisconnect,
   useSignMessage,
   useSendTransaction,
@@ -32,9 +33,12 @@ const config = getDefaultConfig({
 
 const DirectWalletConnect = () => {
   const { address, isConnected, chain } = useAccount()
+  const { connectAsync, connectors } = useConnect()
   const { disconnect } = useDisconnect()
   const { switchChainAsync } = useSwitchChain()
+  const { openConnectModal } = useConnectModal()
 
+  const [connectingWallet, setConnectingWallet] = useState<string | null>(null)
   const [signature, setSignature] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [switchingNetwork, setSwitchingNetwork] = useState<boolean>(false)
@@ -62,6 +66,21 @@ const DirectWalletConnect = () => {
     }
   }, [sendTransactionData])
 
+  // Log danh sách connector để debug
+  useEffect(() => {
+    console.log(
+      'Available connectors:',
+      connectors.map((c) => ({ id: c.id, name: c.name }))
+    )
+  }, [connectors])
+
+  const supportedWallets = [
+    { id: 'metaMask', name: 'MetaMask', color: '#E8831D' },
+    { id: 'okx', name: 'OKX Wallet', color: '#000' },
+    { id: 'trust', name: 'Trust Wallet', color: '#3375BB' },
+    { id: 'walletConnect', name: 'WalletConnect', color: '#3B99FC' },
+  ]
+
   const supportedNetworks = [
     { id: sepolia.id, name: 'Sepolia', chainId: sepolia.id, color: '#6d28d9' },
     {
@@ -71,6 +90,34 @@ const DirectWalletConnect = () => {
       color: '#0052ff',
     },
   ]
+
+  const handleConnectWallet = async (walletId: string) => {
+    try {
+      setConnectingWallet(walletId)
+
+      // Tìm connector phù hợp dựa trên ID
+      const connector = connectors.find(
+        (c) =>
+          c.id.toLowerCase() === walletId.toLowerCase() ||
+          c.name.toLowerCase().includes(walletId.toLowerCase())
+      )
+
+      if (connector) {
+        console.log(`Connecting with ${connector.name}...`)
+        await connectAsync({ connector })
+      } else {
+        // Nếu không tìm thấy connector cụ thể, mở modal của RainbowKit
+        console.log('No specific connector found, opening RainbowKit modal...')
+        if (openConnectModal) {
+          openConnectModal()
+        }
+      }
+    } catch (error) {
+      console.error('Failed to connect wallet:', error)
+    } finally {
+      setConnectingWallet(null)
+    }
+  }
 
   const handleSwitchNetwork = async (chainId: number) => {
     if (!isConnected) return
@@ -122,6 +169,13 @@ const DirectWalletConnect = () => {
     )
   }
 
+  // Xử lý phản hồi từ UI
+  const handleOpenRainbowkitModal = () => {
+    if (openConnectModal) {
+      openConnectModal()
+    }
+  }
+
   return (
     <div
       style={{
@@ -144,18 +198,59 @@ const DirectWalletConnect = () => {
           }}
         >
           <p style={{ margin: '0', fontSize: '14px' }}>
-            <strong>Đang sử dụng thiết bị di động:</strong> Nhấn vào nút Connect
-            để chọn ví của bạn.
+            <strong>Đang sử dụng thiết bị di động:</strong> Nhấn vào ví bạn muốn
+            sử dụng để kết nối trực tiếp.
           </p>
         </div>
       )}
 
-      {/* Sử dụng ConnectButton của RainbowKit để xử lý kết nối ví */}
-      <div style={{ marginBottom: '20px' }}>
-        <ConnectButton />
-      </div>
+      {!isConnected ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {supportedWallets.map((wallet) => (
+            <button
+              key={wallet.id}
+              onClick={() => handleConnectWallet(wallet.id)}
+              disabled={!!connectingWallet}
+              style={{
+                padding: '12px 20px',
+                backgroundColor: wallet.color,
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '16px',
+                position: 'relative',
+              }}
+            >
+              {connectingWallet === wallet.id
+                ? 'Connecting...'
+                : `Connect ${wallet.name}`}
+            </button>
+          ))}
 
-      {isConnected && (
+          <button
+            onClick={handleOpenRainbowkitModal}
+            style={{
+              marginTop: '10px',
+              padding: '12px 20px',
+              backgroundColor: '#f5f5f5',
+              color: '#333',
+              border: '1px solid #ddd',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '16px',
+            }}
+          >
+            Xem thêm tùy chọn ví khác
+          </button>
+        </div>
+      ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
           <div
             style={{
