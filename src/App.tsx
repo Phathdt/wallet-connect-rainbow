@@ -59,11 +59,44 @@ const DirectWalletConnect = () => {
     }
   }, [sendTransactionData]);
 
+  // Kiểm tra nếu có pending connection từ mobile app khi quay lại
+  useEffect(() => {
+    const checkPendingConnections = async () => {
+      const pendingWallet = localStorage.getItem('pendingWalletConnect');
+
+      if (pendingWallet && !isConnected) {
+        localStorage.removeItem('pendingWalletConnect');
+
+        // Tìm connector phù hợp
+        let connector;
+        if (pendingWallet === 'metamask') {
+          connector = connectors.find(c => c.name.toLowerCase().includes('metamask'));
+        } else if (pendingWallet === 'trust') {
+          connector = connectors.find(c => c.name.toLowerCase().includes('trust'));
+        }
+
+        if (connector) {
+          try {
+            setConnectingWallet(pendingWallet);
+            await connectAsync({ connector });
+          } catch (error) {
+            console.error('Failed to connect after returning from app:', error);
+          } finally {
+            setConnectingWallet(null);
+          }
+        }
+      }
+    };
+
+    checkPendingConnections();
+  }, [connectAsync, connectors, isConnected]);
+
   const supportedWallets = [
     { id: 'okx', name: 'OKX Wallet', color: '#000' },
     { id: 'metaMask', name: 'MetaMask', color: '#E8831D' },
     { id: 'trust', name: 'Trust Wallet', color: '#3375BB' },
     { id: 'rabby', name: 'Rabby Wallet', color: '#8697FF' },
+    { id: 'walletConnect', name: 'WalletConnect (Mobile)', color: '#3B99FC' },
   ];
 
   const supportedNetworks = [
@@ -75,21 +108,49 @@ const DirectWalletConnect = () => {
     setConnectingWallet(walletId);
 
     try {
-      const connector = connectors.find((c) => {
-        if (walletId === 'okx' && c.name.toLowerCase().includes('okx')) {
-          return true;
-        }
-        if (walletId === 'metaMask' && c.name.toLowerCase().includes('metamask')) {
-          return true;
-        }
-        if (walletId === 'trust' && c.name.toLowerCase().includes('trust')) {
-          return true;
-        }
-        if (walletId === 'rabby' && c.name.toLowerCase().includes('rabby')) {
-          return true;
-        }
-        return false;
-      });
+      // Kiểm tra nếu đang sử dụng mobile và muốn kết nối với MetaMask
+      if (isMobile() && walletId === 'metaMask') {
+        // Lưu trạng thái vào localStorage để biết khi quay lại
+        localStorage.setItem('pendingWalletConnect', 'metamask');
+
+        // Tạo deep link đến ứng dụng MetaMask
+        window.location.href = `https://metamask.app.link/dapp/${window.location.host}${window.location.pathname}`;
+        return; // Dừng xử lý ở đây vì điều hướng sang app
+      }
+
+      // Kiểm tra nếu đang sử dụng mobile và muốn kết nối với Trust Wallet
+      if (isMobile() && walletId === 'trust') {
+        // Lưu trạng thái vào localStorage
+        localStorage.setItem('pendingWalletConnect', 'trust');
+
+        // Mở Trust Wallet với deep link
+        window.location.href = `trust://open_url?url=${encodeURIComponent(window.location.href)}`;
+        return;
+      }
+
+      let connector;
+
+      if (walletId === 'walletConnect') {
+        // Sử dụng WalletConnect cho mobile wallets
+        connector = connectors.find(c => c.name.toLowerCase().includes('walletconnect'));
+      } else {
+        // Tìm connector cho các ví extension khác
+        connector = connectors.find((c) => {
+          if (walletId === 'okx' && c.name.toLowerCase().includes('okx')) {
+            return true;
+          }
+          if (walletId === 'metaMask' && c.name.toLowerCase().includes('metamask')) {
+            return true;
+          }
+          if (walletId === 'trust' && c.name.toLowerCase().includes('trust')) {
+            return true;
+          }
+          if (walletId === 'rabby' && c.name.toLowerCase().includes('rabby')) {
+            return true;
+          }
+          return false;
+        });
+      }
 
       if (connector) {
         await connectAsync({ connector });
@@ -147,9 +208,24 @@ const DirectWalletConnect = () => {
     }
   };
 
+  const isMobile = () => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  };
+
   return (
     <div style={{ fontFamily: 'Arial, sans-serif', maxWidth: '600px', margin: '0 auto', padding: '20px' }}>
       <h1>Connect Your Wallet</h1>
+
+      {isMobile() && !isConnected && (
+        <div style={{ marginBottom: '20px', backgroundColor: '#f0f9ff', padding: '10px', borderRadius: '8px', border: '1px solid #bae6fd' }}>
+          <p style={{ margin: '0', fontSize: '14px', marginBottom: '10px' }}>
+            <strong>Đang sử dụng thiết bị di động:</strong> Nhấn vào ví bạn muốn sử dụng để được chuyển đến ứng dụng ví tương ứng.
+          </p>
+          <p style={{ margin: '0', fontSize: '13px', color: '#666' }}>
+            Sau khi kết nối trong ứng dụng ví, bạn sẽ được chuyển hướng trở lại web này tự động.
+          </p>
+        </div>
+      )}
 
       {!isConnected ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -169,9 +245,22 @@ const DirectWalletConnect = () => {
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontSize: '16px',
+                position: 'relative',
               }}
             >
               {connectingWallet === wallet.id ? 'Connecting...' : `Connect ${wallet.name}`}
+              {isMobile() && (wallet.id === 'metaMask' || wallet.id === 'trust') && (
+                <span style={{
+                  position: 'absolute',
+                  right: '10px',
+                  fontSize: '12px',
+                  backgroundColor: 'rgba(255,255,255,0.2)',
+                  padding: '2px 6px',
+                  borderRadius: '4px'
+                }}>
+                  Opens App
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -281,7 +370,7 @@ const App = () => {
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider>
+        <RainbowKitProvider modalSize="compact">
           <DirectWalletConnect />
         </RainbowKitProvider>
       </QueryClientProvider>
