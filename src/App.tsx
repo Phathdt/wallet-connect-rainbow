@@ -3,6 +3,7 @@ import '@rainbow-me/rainbowkit/styles.css';
 import {
   RainbowKitProvider,
 } from '@rainbow-me/rainbowkit';
+
 import {
   http,
   WagmiProvider,
@@ -53,6 +54,41 @@ const DirectWalletConnect = () => {
     }
   }, [signMessageData]);
 
+  const manualConnect = async (walletType: string) => {
+    try {
+      if (walletType === 'metamask' && window.ethereum) {
+        await window.ethereum.request({ method: 'eth_requestAccounts' });
+        console.log("MetaMask connected manually!");
+
+        window.location.reload();
+      } else {
+        alert("Không thể kết nối với ví. Vui lòng đảm bảo ví đã được cài đặt.");
+      }
+    } catch (error) {
+      console.error("Manual connect error:", error);
+      alert(`Lỗi kết nối thủ công: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const FallbackMetaMaskConnect = () => (
+    <button
+      onClick={() => manualConnect('metamask')}
+      style={{
+        marginTop: '10px',
+        padding: '10px',
+        backgroundColor: '#f5f5f5',
+        border: '1px solid #ddd',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+      }}
+    >
+      Nếu có vấn đề - Kết nối MetaMask thủ công
+    </button>
+  );
   useEffect(() => {
     if (sendTransactionData) {
       setTxHash(sendTransactionData);
@@ -76,35 +112,42 @@ const DirectWalletConnect = () => {
     setConnectingWallet(walletId);
 
     try {
-      let connector;
+      const connector = connectors.find((c) => {
+        console.log("Available connector:", c.name, c.id);
 
-      if (walletId === 'walletConnect') {
-        connector = connectors.find(c => c.name.toLowerCase().includes('walletconnect'));
-      } else {
-        connector = connectors.find((c) => {
-          if (walletId === 'okx' && c.name.toLowerCase().includes('okx')) {
-            return true;
-          }
-          if (walletId === 'metaMask' && c.name.toLowerCase().includes('metamask')) {
-            return true;
-          }
-          if (walletId === 'trust' && c.name.toLowerCase().includes('trust')) {
-            return true;
-          }
-          if (walletId === 'rabby' && c.name.toLowerCase().includes('rabby')) {
-            return true;
-          }
-          return false;
-        });
-      }
+        const connectorName = c.name.toLowerCase();
+
+        if (walletId === 'metaMask' && (connectorName.includes('metamask') || c.id === 'metaMask')) {
+          return true;
+        }
+        if (walletId === 'trust' && (connectorName.includes('trust') || c.id === 'trust')) {
+          return true;
+        }
+        if (walletId === 'okx' && (connectorName.includes('okx') || c.id === 'okx')) {
+          return true;
+        }
+        if (walletId === 'rabby' && (connectorName.includes('rabby') || c.id === 'rabby')) {
+          return true;
+        }
+        if (walletId === 'walletConnect' && (connectorName.includes('walletconnect') || c.id === 'walletConnect')) {
+          return true;
+        }
+
+        return false;
+      });
+
+      console.log("Selected connector:", connector?.name || "No connector found");
 
       if (connector) {
-        await connectAsync({ connector });
+        const result = await connectAsync({ connector });
+        console.log("Connection result:", result);
       } else {
         console.error(`No connector found for wallet: ${walletId}`);
+        alert(`Không tìm thấy connector cho ví: ${walletId}. Vui lòng thử lại hoặc chọn ví khác.`);
       }
     } catch (error) {
       console.error('Failed to connect wallet:', error);
+      alert(`Lỗi kết nối: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setConnectingWallet(null);
     }
@@ -197,6 +240,9 @@ const DirectWalletConnect = () => {
               {connectingWallet === wallet.id ? 'Connecting...' : `Connect ${wallet.name}`}
             </button>
           ))}
+
+          {}
+          <FallbackMetaMaskConnect />
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
